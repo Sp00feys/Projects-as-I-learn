@@ -1,0 +1,188 @@
+---
+title: "Project 1" 
+author: "Julian N"
+date: "2024-02-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = "")
+library(caret)
+library(randomForest)
+library(readr)
+library(dplyr)
+library(plotly)
+library(palmerpenguins)
+```
+
+# Introduction to the Data
+
+The goal of this project is to create a classification model using the Palmer Penguins data Set,
+
+and to visualize the accuracy of different methods.
+
+```{r}
+
+```
+
+## Processing data
+
+```{r split, message=FALSE, warning=FALSE, include=FALSE, paged.print=TRUE}
+
+set.seed(5339)
+levels(penguins$species)
+ penguins <- na.omit(penguins)
+     penguins<- subset(penguins, select = -sex)
+      penguins <- subset(penguins, select = -island)
+      
+
+
+```
+
+```{r}
+head(penguins)
+```
+
+After removing all NA's, the "sex" column, and "island" column, the data set consists of a list of penguin species, and identifying factors like like flipper length and body mass.
+
+```{r}
+trainingSet <-createDataPartition(penguins$species, p=0.80,list = FALSE)
+
+
+training <-penguins[trainingSet,]
+
+    tester <- penguins[-trainingSet,]#remaining
+
+```
+
+Using the *caret* library I then subset the data into a training and a testing set, with 20% of the data reserved for validating the results
+
+## Making a model
+
+```{r algorithm }
+penguinC<- trainControl(method='cv', number =10)
+
+metric = 'Accuracy'
+#linear discriminant analysis
+penguinTrainingLDA <- train(
+                        species ~ .,
+                        data= penguins,
+                        metric=metric,
+                        trconrol=penguinC,
+                        method = 'lda')
+
+penguinPredictions<- predict(penguinTrainingLDA,tester)
+
+
+
+```
+
+after training the model using the Linear Discriminant Analysis method we utilize the predict function to cross reference with our test dataset.
+
+## Viewing the Model
+
+```{r}
+head(penguinPredictions)
+```
+
+The predictions are not very very view-able, so we can pass it into a confusion matrix to see how the model did.
+
+```{r matrix, message=TRUE}
+
+
+#levels(penguinPredictions)
+#levels(as.factor(tester$species))
+##as.facor changes levels to same as predictions
+
+
+confusionMatrix(penguinPredictions,as.factor(tester$species))
+```
+
+😀The model seems to have gotten all of the test predictions correct
+
+## Testing other Methods
+
+```{r}
+
+set.seed(5339)
+
+
+
+penguinTrainingRF <- train(
+                        species ~ .,
+                        data= penguins,
+                        metric=metric,
+                        trconrol=penguinC,
+                        method = "rf")
+
+predictionRF <- predict(penguinTrainingRF,tester)
+
+confusionMatrix(predictionRF,as.factor(tester$species))
+
+
+
+```
+
+We preform the same steps using the Random Forest training method, however on the surface there seems to be no difference in accuracy.
+
+## Resamples
+
+```{r plottingrs, echo=FALSE, warning=FALSE}
+ldaPlot<-plot_ly(penguinTrainingLDA$resample,
+        x = ~Resample, 
+        y = ~Accuracy,
+        mode = "markers",
+        type = "scatter"
+        )
+
+
+ldaPlot<-ldaPlot %>% layout(
+  title = 'LDA Resamples',
+  xaxis = list(title = 'sample', showticklabels = FALSE),  
+  yaxis = list(title = 'accuracy')
+)
+ldaPlot
+```
+
+Viewing the re-samples individually for the models paints a more accurate picture of the models and allows for further understanding of the effectiveness of the models
+
+## Comparison of Re-samps
+
+```{r ldrfplotted, echo=FALSE, warning=FALSE}
+
+combinedData <- bind_rows(
+   mutate(penguinTrainingLDA$resample, model = "LDA"),
+  mutate(penguinTrainingRF$resample, model = "Random Forest")
+ 
+)
+
+combinedPlot <- plot_ly(combinedData, x = ~Resample, y = ~Accuracy, color = ~model, type = "scatter", mode = "markers")
+  
+combinedPlot<-combinedPlot%>%layout(
+  title = "LDA and RF comparison",
+ xaxis = list(title = 'sample', showticklabels = FALSE)
+)
+
+combinedPlot
+```
+
+When re-samples from both RF and LDA are plotted we see that LDA has significantly more samples with 100% accuracy.
+
+### Averages
+
+```{r echo=FALSE}
+penguinResamps <- resamples(list(
+  lda = penguinTrainingLDA,
+  rf =penguinTrainingRF ))
+summary(penguinResamps)
+```
+
+We can see that in the re-samples that the lda method had slightly higher accuracy with a 98% mean whereas rf had a 97% mean
+
+```{r echo=FALSE}
+
+ggplot(data = penguinResamps)+
+  theme_dark()
+```
+
+We can better visualize the difference in accuracy when we plot this data and can conclude that LDA is more accurate than RF in this application, and if only marginally.
